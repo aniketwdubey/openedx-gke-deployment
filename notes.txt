@@ -1,0 +1,102 @@
+CMS_HOST: studio.openedx-stage.example.com
+LMS_HOST: openedx-stage.example.com
+
+LMS
+curl -I -H "Host: openedx-stage.example.com" http://localhost:8000/heartbeat
+curl -sS -H "Host: openedx-stage.example.com" "http://localhost:8000/heartbeat?extended=1"
+
+CMS
+curl -I -H "Host: studio.openedx-stage.example.com" http://localhost:8000/heartbeat
+curl -sS -H "Host: studio.openedx-stage.example.com" "http://localhost:8000/heartbeat?extended=1"
+
+# external
+curl -I -H "Host: studio.openedx-demo.example.com" http://studio.openedx-stage.example.com/heartbeat
+curl -I -H "Host: openedx-demo.example.com" http://openedx-stage.example.com/heartbeat
+
+
+# tcp
+exec 3<>/dev/tcp/localhost/8000 && echo "Port 8000 is open" || echo "Port 8000 is closed"
+
+
+gcloud compute firewall-rules create allow-gcp-health-checks \
+    --network stage-sarvam-labs-vpc \
+    --direction INGRESS \
+    --priority 1000 \
+    --action ALLOW \
+    --rules tcp:8000 \
+    --source-ranges 35.191.0.0/16,130.211.0.0/22 \
+    --target-tags gke-node \
+    --description "Allow Google Cloud health checks to reach OpenEdX pods on port 8000"
+
+
+What this did:
+
+Allowed traffic from Google Cloud health check IP ranges (35.191.0.0/16, 130.211.0.0/22)
+
+Permitted access to port 8000 on your GKE cluster nodes
+
+Targeted your custom VPC network stage-sarvam-labs-vpc
+
+# LMS deployment
+kubectl patch deployment lms -n openedx --patch '{
+  "spec": {
+    "template": {
+      "spec": {
+        "containers": [{
+          "name": "lms",
+          "readinessProbe": {
+            "httpGet": {
+              "path": "/heartbeat",
+              "port": 8000,
+              "httpHeaders": [{
+                "name": "Host",
+                "value": "openedx-stage.example.com"
+              }]
+            },
+            "initialDelaySeconds": 30,
+            "periodSeconds": 10,
+            "timeoutSeconds": 5,
+            "successThreshold": 1,
+            "failureThreshold": 3
+          }
+        }]
+      }
+    }
+  }
+}'
+
+# CMS deployment  
+kubectl patch deployment cms -n openedx --patch '{
+  "spec": {
+    "template": {
+      "spec": {
+        "containers": [{
+          "name": "cms",
+          "readinessProbe": {
+            "httpGet": {
+              "path": "/heartbeat",
+              "port": 8000,
+              "httpHeaders": [{
+                "name": "Host",
+                "value": "studio.openedx-stage.example.com"
+              }]
+            },
+            "initialDelaySeconds": 30,
+            "periodSeconds": 10,
+            "timeoutSeconds": 5,
+            "successThreshold": 1,
+            "failureThreshold": 3
+          }
+        }]
+      }
+    }
+  }
+}'
+
+
+kubectl set env deployment/cms -n openedx DJANGO_ALLOWED_HOSTS="openedx-stage.example.com,studio.openedx-stage.example.com,10.0.0.0/8,localhost,127.0.0.1"
+kubectl set env deployment/lms -n openedx DJANGO_ALLOWED_HOSTS="openedx-stage.example.com,studio.openedx-stage.example.com,10.0.0.0/8,localhost,127.0.0.1"
+
+# create user
+
+tutor k8s do createuser --staff --superuser admin admin@example.com

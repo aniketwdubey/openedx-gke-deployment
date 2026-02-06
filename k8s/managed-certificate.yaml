@@ -1,0 +1,12 @@
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  name: openedx-ssl-cert
+  namespace: openedx
+spec:
+  domains:
+  - studio.openedx-stage.example.com
+  - openedx-stage.example.com
+  - apps.openedx-stage.example.com
+
+

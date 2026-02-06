@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cms
+  labels:
+    app.kubernetes.io/name: cms
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cms
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: cms
+    spec:
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+      containers:
+        - name: cms
+          image: docker.io/overhangio/openedx:20.0.1
+          env:
+          - name: SERVICE_VARIANT
+            value: cms
+          - name: DJANGO_SETTINGS_MODULE
+            value: cms.envs.tutor.production
+          - name: UWSGI_WORKERS
+            value: "2"
+          ports:
+            - containerPort: 8000
+          volumeMounts:
+            - mountPath: /openedx/edx-platform/lms/envs/tutor/
+              name: settings-lms
+            - mountPath: /openedx/edx-platform/cms/envs/tutor/
+              name: settings-cms
+            - mountPath: /openedx/config
+              name: config
+            - mountPath: /openedx/uwsgi.ini
+              name: uwsgi-config
+              subPath: uwsgi.ini
+          resources:
+            requests:
+              memory: 2Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+      volumes:
+        - name: settings-lms
+          configMap:
+            name: openedx-settings-lms-5gkm4c7gk5
+        - name: settings-cms
+          configMap:
+            name: openedx-settings-cms-tk85248dtd
+        - name: config
+          configMap:
+            name: openedx-config-mk6c5fgb9t
+        - name: uwsgi-config
+          configMap:
+            name: openedx-uwsgi-config-5t68c2tcc5
+            items:
+              - key: uwsgi.ini
+                path: uwsgi.ini
